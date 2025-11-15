@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd 
 import joblib
 import numpy as np 
+import gdown
+import os
 
 # Настройка страницы 
 st.set_page_config(
@@ -11,15 +13,27 @@ st.set_page_config(
 )
 
 
-# Загрузка модели 
+
 @st.cache_resource
 def load_model():
+    model_path = "final_real_estate_pipeline.pkl"
+    
+    if not os.path.exists(model_path):
+        with st.spinner('📥 Скачиваю модель с Google Drive...'):
+            file_id = "1oFv_gIdwuplbBzXIY-3-bJV4FKL6hsyo"
+            url = f"https://drive.google.com/uc?id={file_id}"
+            gdown.download(url, model_path, quiet=False)
+            st.success("✅ Модель скачана!")
+    
     try:
-        model = joblib.load('final_real_estate_pipeline.pkl')
-        return model 
+        model = joblib.load(model_path)
+        st.success("✅ Модель загружена в память!")
+        return model
     except Exception as e:
-        st.error(f'Ошибка загрузки модели :{e}')
+        st.error(f"❌ Ошибка загрузки модели: {e}")
         return None
+
+
     
 # Основной зоголовок
 st.title('Предсказатель цен на недвижимость')
