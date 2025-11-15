@@ -6,7 +6,7 @@ import numpy as np
 # Настройка страницы 
 st.set_page_config(
     page_title = "Предсказатель цен на недвижимость",
-    pege_icon= "🏠", 
+    page_icon= "🏠", 
     loyout = 'wide'
 )
 
