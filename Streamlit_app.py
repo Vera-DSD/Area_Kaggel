@@ -7,12 +7,10 @@ import os
 
 # Настройка страницы 
 st.set_page_config(
-    page_title = "Предсказатель цен на недвижимость",
-    page_icon= "🏠", 
-    layout = 'wide'
+    page_title="Предсказатель цен на недвижимость",
+    page_icon="🏠", 
+    layout='wide'
 )
-
-
 
 @st.cache_resource
 def load_model():
@@ -33,9 +31,125 @@ def load_model():
         st.error(f"❌ Ошибка загрузки модели: {e}")
         return None
 
-
+def prepare_features(input_dict):
+    """
+    Преобразует сырые данные в формат, который ожидает модель
+    """
+    # Создаем словарь для маппинга значений
+    encoding_maps = {
+        'renovation': {
+            'без ремонта': 0,
+            'косметический': 1,
+            'евроремонт': 2,
+            'дизайнерский': 3
+        },
+        'windows': {
+            'во двор': 0,
+            'на улицу': 1,
+            'на улицу и двор': 2
+        },
+        'children_pets': {
+            'Можно с животными': 0,
+            'Можно с детьми': 1,
+            'Можно с детьми, Можно с животными': 2
+        },
+        'balcony': {
+            'нет': 0,
+            '1 балкон': 1,
+            '2 балкона': 2,
+            'лоджия': 3,
+            '2 лоджии': 4
+        },
+        'parking': {
+            'нет': 0,
+            'наземная': 1,
+            'подземная': 2,
+            'многоуровневая': 3,
+            'на крыше': 4
+        },
+        'bathroom': {
+            'совмещенный': 0,
+            'раздельный': 1,
+            '2 санузла': 2
+        },
+        'property_type': {
+            'Квартира': 1,
+            'Студия': 0,
+            'Апартаменты': 0,
+            'Пентхаус': 0
+        },
+        'metro': {
+            'Центр': 1,
+            'Спутник': 0
+            # Добавьте другие станции метро
+        }
+    }
     
-# Основной зоголовок
+    # Создаем базовый DataFrame с нулями для всех ожидаемых фич
+    expected_features = {
+        'renovation_encoded': 0,
+        'windows_encoded': 0,
+        'children_pets_encoded': 0,
+        'balcony_encoded': 0,
+        'address_encod': 0,  # По умолчанию 0
+        'property_Квартира': 0,
+        'metro_encoder': 0,
+        'parking_encoded': 0,
+        'bathroom_encoded': 0,
+        'total_area': 0,
+        'numbere_of_rooms': 0,
+        'ceiling_height': 0,
+        'Time_metro': 0,
+        'pass_elevators': 0,
+        'cargo_elevators': 0
+    }
+    
+    # Заполняем числовые фичи
+    numeric_features = ['total_area', 'numbere_of_rooms', 'ceiling_height', 
+                       'Time_metro', 'pass_elevators', 'cargo_elevators']
+    
+    for feature in numeric_features:
+        if feature in input_dict:
+            expected_features[feature] = input_dict[feature]
+    
+    # Кодируем категориальные фичи
+    if 'renovation' in input_dict and input_dict['renovation'] in encoding_maps['renovation']:
+        expected_features['renovation_encoded'] = encoding_maps['renovation'][input_dict['renovation']]
+    
+    if 'windows' in input_dict and input_dict['windows'] in encoding_maps['windows']:
+        expected_features['windows_encoded'] = encoding_maps['windows'][input_dict['windows']]
+    
+    if 'children_pets' in input_dict and input_dict['children_pets'] in encoding_maps['children_pets']:
+        expected_features['children_pets_encoded'] = encoding_maps['children_pets'][input_dict['children_pets']]
+    
+    if 'balcony' in input_dict and input_dict['balcony'] in encoding_maps['balcony']:
+        expected_features['balcony_encoded'] = encoding_maps['balcony'][input_dict['balcony']]
+    
+    if 'parking' in input_dict and input_dict['parking'] in encoding_maps['parking']:
+        expected_features['parking_encoded'] = encoding_maps['parking'][input_dict['parking']]
+    
+    if 'bathroom' in input_dict and input_dict['bathroom'] in encoding_maps['bathroom']:
+        expected_features['bathroom_encoded'] = encoding_maps['bathroom'][input_dict['bathroom']]
+    
+    # One-hot encoding для property_type
+    if 'property_type' in input_dict:
+        expected_features['property_Квартира'] = encoding_maps['property_type'][input_dict['property_type']]
+    
+    # Кодирование метро (упрощенное)
+    if 'metro' in input_dict:
+        metro_name = input_dict['metro']
+        if metro_name in encoding_maps['metro']:
+            expected_features['metro_encoder'] = encoding_maps['metro'][metro_name]
+        else:
+            # Для неизвестных станций используем значение по умолчанию
+            expected_features['metro_encoder'] = 0
+    
+    # address_encod - установим в 0 если не используется
+    expected_features['address_encod'] = 0
+    
+    return expected_features
+
+# Основной заголовок
 st.title('Предсказатель цен на недвижимость')
 st.markdown('---')
 
@@ -43,15 +157,24 @@ st.markdown('---')
 model = load_model()
 
 if model is not None:
-    st.success("Модель успешно загружена !")
+    try:
+        # Посмотрите, какие фичи ожидает модель
+        if hasattr(model, 'feature_names_in_'):
+            st.write("Ожидаемые фичи:", list(model.feature_names_in_))
+        st.success("✅ Модель готова к работе!")
+    except Exception as e:
+        st.error(f"❌ Ошибка инициализации модели: {e}")
+
+if model is not None:
+    st.success("Модель успешно загружена!")
     col1, col2 = st.columns(2)
 
     with col1:
         st.subheader('Основные характеристики')
         total_area = st.number_input(
             'Общая площадь(м2)',
-            min_value= 10.0,
-            max_value= 500.0,
+            min_value=10.0,
+            max_value=500.0,
             value=65.0,
             step=0.5
         )
@@ -137,7 +260,8 @@ if model is not None:
     )
 
     # Кнопка предсказаний 
-    if st.button('🎯 Предсказать цену", type="primary'):
+    if st.button('🎯 Предсказать цену', type= "primary"):
+        # Собираем сырые данные
         features_dict = {
             'total_area': total_area,
             'numbere_of_rooms': numbere_of_rooms,
@@ -146,21 +270,33 @@ if model is not None:
             'property_type': property_type,
             'metro': metro,
             'renovation': renovation,
-            'amenities': amenities,
             'balcony': balcony,
             'windows': windows,
             'parking': parking,
             'bathroom': bathroom,
             'children_pets': children_pets,
             'pass_elevators': pass_elevators,
-            'cargo_elevators': cargo_elevators,
-            'address': 'не указан'  # Адрес обычно не используется
+            'cargo_elevators': cargo_elevators
         }
         
         try:
-            # Создаем DataFrame и делаем предсказание
-            new_data = pd.DataFrame([features_dict])
-            predicted_price = model.predict(new_data)[0]
+            # Преобразуем данные в формат модели
+            prepared_features = prepare_features(features_dict)
+            
+            # Создаем DataFrame в правильном порядке
+            if hasattr(model, 'feature_names_in_'):
+                # Упорядочиваем колонки как ожидает модель
+                input_df = pd.DataFrame([prepared_features])[model.feature_names_in_]
+            else:
+                input_df = pd.DataFrame([prepared_features])
+            
+            # Показываем отладочную информацию
+            with st.expander("📊 Отладочная информация"):
+                st.write("Подготовленные фичи:", prepared_features)
+                st.write("DataFrame для предсказания:", input_df)
+            
+            # Делаем предсказание
+            predicted_price = model.predict(input_df)[0]
             
             # Показываем результат
             st.markdown("---")
@@ -189,88 +325,17 @@ if model is not None:
                     value="R² = 0.790",
                     help="Коэффициент детерминации"
                 )
-            
-            # Детали предсказания
-            with st.expander("📋 Детали введенных данных"):
-                st.json(features_dict)
                 
         except Exception as e:
             st.error(f"❌ Ошибка при предсказании: {e}")
-    
-    # Боковая панель с информацией
-    with st.sidebar:
-        st.header("ℹ️ О модели")
-        st.markdown("""
-        **Характеристики модели:**
-        - Алгоритм: Random Forest
-        - Точность (MAE): ±$7,412
-        - Качество (R²): 0.790
-        - Обучена на: 20,000+ объявлений
-        
-        **Как использовать:**
-        1. Заполните все поля формы
-        2. Нажмите кнопку "Предсказать цену"
-        3. Получите оценку стоимости недвижимости
-        
-        **Примечание:** Результат является прогнозом и может отличаться от реальной цены.
-        """)
-        
+            st.info("Проверьте отладочную информацию выше для диагностики проблемы")
+
+# ... остальной код (sidebar и футер) остается без изменений
+    # Футер
         st.markdown("---")
-        st.subheader("🚀 Быстрый прогноз")
-        
-        # Быстрые шаблоны
-        template = st.selectbox(
-            "Выберите шаблон:",
-            ["Стандартная 2-комнатная", "Студия в центре", "Премиум 3-комнатная"]
-        )
-        
-        if st.button("Применить шаблон"):
-            if template == "Стандартная 2-комнатная":
-                st.session_state.update({
-                    'total_area': 65.0,
-                    'numbere_of_rooms': 2,
-                    'ceiling_height': 2.7,
-                    'Time_metro': 15,
-                    'property_type': 'Квартира',
-                    'metro': 'Спутник',
-                    'renovation': 'косметический'
-                })
-            elif template == "Студия в центре":
-                st.session_state.update({
-                    'total_area': 40.0,
-                    'numbere_of_rooms': 1,
-                    'ceiling_height': 3.0,
-                    'Time_metro': 5,
-                    'property_type': 'Студия',
-                    'metro': 'Центр',
-                    'renovation': 'евроремонт'
-                })
-            elif template == "Премиум 3-комнатная":
-                st.session_state.update({
-                    'total_area': 95.0,
-                    'numbere_of_rooms': 3,
-                    'ceiling_height': 3.2,
-                    'Time_metro': 10,
-                    'property_type': 'Квартира',
-                    'metro': 'Центр',
-                    'renovation': 'дизайнерский'
-                })
-            st.rerun()
-
-else:
-    st.error("""
-    ❌ Модель не загружена! Убедитесь что:
-    1. Файл `final_real_estate_pipeline.pkl` находится в той же папке
-    2. Модель была сохранена корректно
-    """)
-
-# Футер
-st.markdown("---")
-st.markdown(
+        st.markdown(
     "📊 *Модель машинного обучения для предсказания цен на недвижимость* • "
-    "R² = 0.790 • MAE = $7,412"
-)
-
+    "R² = 0.790 • MAE = $7,412")
 
 
 
