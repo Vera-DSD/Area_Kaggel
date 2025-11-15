@@ -7,7 +7,7 @@ import numpy as np
 st.set_page_config(
     page_title = "Предсказатель цен на недвижимость",
     page_icon= "🏠", 
-    loyout = 'wide'
+    layout = 'wide'
 )
 
 
